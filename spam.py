@@ -20,7 +20,6 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
-from typing import List
 from wordcloud import WordCloud
 
 class MyCustomTokenizer(object):
@@ -52,7 +51,7 @@ class MyCustomTokenizer(object):
                 bag[word] += 1
         return bag
 
-class WordAnalyzer(object):
+class WordAnalyzer(BaseEstimator, TransformerMixin):
     def __init__(self, tokenizer: 'MyCustomTokenizer', num_ham_words: int=100, num_spam_words: int=100):
         self.num_ham_words = num_ham_words
         self.num_spam_words = num_spam_words
@@ -87,22 +86,25 @@ class WordAnalyzer(object):
         self.words = {'ham': ham_list[:self.num_ham_words], 'spam': spam_list[:self.num_spam_words]}
         return self.words
     
+    def transform(self, X) -> dok_matrix:
+        if self.words == None:
+            raise Exception('Fit must be run before transform.')
+        
+        word_list = self.words['ham'] + self.words['spam']
+        features = dok_matrix((len(X), len(word_list)), dtype=np.float32)
+        for i in range(len(X)):
+            message = self.tokenizer.tokenize(X.iloc[i])
+            for j in range(len(word_list)):
+                if word_list[j] in message:
+                    features[i, j] = message[word_list[j]]
+        return features.toarray()
+    
     def to_json(self, filename: str) -> None:
         if self.words == None:
             raise Exception('No words extracted. Run the extract method.')
             
         with open(filename, 'w') as file:
             json.dump(self.words, file, indent=4)
-    
-def get_features(X, tokenizer: 'MyCustomTokenizer', ham_words: List[str], spam_words: List[str]) -> dok_matrix:
-    word_list = ham_words + spam_words
-    features = dok_matrix((len(X), len(word_list)), dtype=np.float32)
-    for i in range(len(X)):
-        message = tokenizer.tokenize(X.iloc[i])
-        for j in range(len(word_list)):
-            if word_list[j] in message:
-                features[i, j] = message[word_list[j]]
-    return features.toarray()
 
 def main():
     spam_dataset = pd.read_csv(
@@ -158,10 +160,10 @@ def main():
     custom_tokenizer = MyCustomTokenizer(tokenizer, stemmer)
     
     word_analyzer = WordAnalyzer(custom_tokenizer, num_ham_words=100, num_spam_words=100)
-    words = word_analyzer.fit(X, y)
+    word_analyzer.fit(X, y)
     word_analyzer.to_json('words.json')
 
-    features_train = get_features(X_train, custom_tokenizer, words['ham'], words['spam'])
+    features_train = word_analyzer.transform(X_train)
     
     cnb = MultinomialNB(alpha=1.0)
     
@@ -169,7 +171,7 @@ def main():
     
     cnb.predict(features_train[1:20])
     
-    features_test = get_features(X_test, custom_tokenizer, words['ham'], words['spam'])
+    features_test = word_analyzer.transform(X_test)
     
     y_pred = cnb.predict(features_test)
     cnb.score(features_test, y_test)
