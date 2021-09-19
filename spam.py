@@ -23,14 +23,40 @@ from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, precisio
 from typing import List
 from wordcloud import WordCloud
 
+class MyCustomTokenizer(object):
+    def __init__(self, tokenizer: TokenizerI, stemmer: StemmerI=None, lower_case: bool=True, exclude_stopwords: bool=True):
+        self.tokenizer = tokenizer
+        self.stemmer = stemmer
+        self.lower_case = lower_case
+        self.exclude_stopwords = exclude_stopwords
+    
+    def tokenize(self, message: str) -> Counter:
+        if self.lower_case:
+            message = message.lower()
+        
+        words = self.tokenizer.tokenize(message)
+    
+        if self.exclude_stopwords:
+            exclude_words = stopwords.words('english')
+            words = [word for word in words if word not in exclude_words]
+        
+        if self.stemmer != None:
+            words = [self.stemmer.stem(word) for word in words]
+        
+        bag = Counter()
+        
+        for word in words:
+            if word not in bag:
+                bag[word] = 1
+            else:
+                bag[word] += 1
+        return bag
+
 class WordAnalyzer(object):
-    def __init__(self, num_ham_words: int=100, num_spam_words: int=100):
+    def __init__(self, tokenizer: 'MyCustomTokenizer', num_ham_words: int=100, num_spam_words: int=100):
         self.num_ham_words = num_ham_words
         self.num_spam_words = num_spam_words
-        
-        self.tokenizer = RegexpTokenizer(r'\w+')
-        self.stemmer = PorterStemmer()
-        
+        self.tokenizer = tokenizer
         self.words = None
         
     def fit(self, X, y) -> np.array:
@@ -38,7 +64,7 @@ class WordAnalyzer(object):
         ham_words = Counter()
         
         for index, row in X.iteritems():
-            for word in process_message(row, self.tokenizer, self.stemmer):
+            for word in self.tokenizer.tokenize(row):
                 if y[index] == 0:
                     if word not in ham_words:
                         ham_words[word] = 1
@@ -55,6 +81,9 @@ class WordAnalyzer(object):
         ham_list = sorted(ham_words.items(), key=lambda x: x[1], reverse=True)
         spam_list = sorted(spam_words.items(), key=lambda x: x[1], reverse=True)
         
+        ham_list = [word[0] for word in ham_list]
+        spam_list = [word[0] for word in spam_list]
+        
         self.words = {'ham': ham_list[:self.num_ham_words], 'spam': spam_list[:self.num_spam_words]}
         return self.words
     
@@ -64,80 +93,16 @@ class WordAnalyzer(object):
             
         with open(filename, 'w') as file:
             json.dump(self.words, file, indent=4)
-
-class FeatureModel(BaseEstimator, TransformerMixin):
-    def __init__(self, X, y, num_ham_words: int=100, num_spam_words: int=100):
-        self.num_ham_words = num_ham_words
-        self.num_spam_words = num_spam_words
-        
-        self.tokenizer = RegexpTokenizer(r'\w+')
-        self.stemmer = PorterStemmer()
-        
-        self.spam_words = Counter()
-        self.ham_words = Counter()
-        self.word_list = []
-        
-        for index, row in X.iteritems():
-            message = Counter()
-            
-            for word in process_message(row, self.tokenizer, self.stemmer):
-                if y[index] == 0:
-                    if word not in self.ham_words:
-                        self.ham_words[word] = 1
-                    else:
-                        self.ham_words[word] += 1
-                
-                if y[index] == 1:
-                    if word not in self.spam_words:
-                        self.spam_words[word] = 1
-                    else:
-                        self.spam_words[word] += 1
-                
-                if word not in message:
-                    message[word] = 1
-                else:
-                    message[word] += 1
-        
-        ham_list = sorted(self.ham_words.items(), key=lambda x: x[1], reverse=True)
-        spam_list = sorted(self.spam_words.items(), key=lambda x: x[1], reverse=True)
-        
-        self.word_list = ham_list[:self.num_ham_words][0] + spam_list[:self.num_spam_words][0]
     
-def process_message(message: str, tokenizer: TokenizerI, stemmer: StemmerI=None, lower_case: bool=True, exclude_stopwords: bool=True) -> List[Counter]:
-    if lower_case:
-        message = message.lower()
-    
-    words = tokenizer.tokenize(message)
-
-    if exclude_stopwords:
-        exclude_words = stopwords.words('english')
-        words = [word for word in words if word not in exclude_words]
-    
-    if stemmer != None:
-        words = [stemmer.stem(word) for word in words]
-    
-    bag = Counter()
-    
-    for word in words:
-        if word not in bag:
-            bag[word] = 1
-        else:
-            bag[word] += 1
-
-    return bag
-    
-def get_features(X, feature_model: 'FeatureModel') -> dok_matrix:
-    features = dok_matrix((len(X), len(feature_model.word_list)), dtype=np.float32)
+def get_features(X, tokenizer: 'MyCustomTokenizer', ham_words: List[str], spam_words: List[str]) -> dok_matrix:
+    word_list = ham_words + spam_words
+    features = dok_matrix((len(X), len(word_list)), dtype=np.float32)
     for i in range(len(X)):
-        message = process_message(X.iloc[i], feature_model.tokenizer, feature_model.stemmer)
-        for j in range(len(feature_model.word_list)):
-            if feature_model.word_list[j] not in message:
-                features[i, j] = 0
-            else:
-                features[i, j] = message[feature_model.word_list[j]]
+        message = tokenizer.tokenize(X.iloc[i])
+        for j in range(len(word_list)):
+            if word_list[j] in message:
+                features[i, j] = message[word_list[j]]
     return features.toarray()
-
-
 
 def main():
     spam_dataset = pd.read_csv(
@@ -187,13 +152,16 @@ def main():
     plt.tight_layout(pad=0)
     plt.show()
     
-    word_analyzer = WordAnalyzer(num_ham_words=100, num_spam_words=100)
-    words = word_analyzer.fit(X, y)
-    word_extractor.to_json('words.json')
+    tokenizer = RegexpTokenizer(r'\w+')
+    stemmer = PorterStemmer()
     
-    feature_model = FeatureModel(X, y)
+    custom_tokenizer = MyCustomTokenizer(tokenizer, stemmer)
+    
+    word_analyzer = WordAnalyzer(custom_tokenizer, num_ham_words=100, num_spam_words=100)
+    words = word_analyzer.fit(X, y)
+    word_analyzer.to_json('words.json')
 
-    features_train = get_features(X_train, feature_model)
+    features_train = get_features(X_train, custom_tokenizer, words['ham'], words['spam'])
     
     cnb = MultinomialNB(alpha=1.0)
     
@@ -201,7 +169,7 @@ def main():
     
     cnb.predict(features_train[1:20])
     
-    features_test = get_features(X_test, feature_model)
+    features_test = get_features(X_test, custom_tokenizer, words['ham'], words['spam'])
     
     y_pred = cnb.predict(features_test)
     cnb.score(features_test, y_test)
