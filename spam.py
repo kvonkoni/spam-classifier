@@ -22,7 +22,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
 from wordcloud import WordCloud
 
-class MyCustomTokenizer(object):
+class CustomTokenizer(object):
     def __init__(self, tokenizer: TokenizerI, stemmer: StemmerI=None, lower_case: bool=True, exclude_stopwords: bool=True):
         self.tokenizer = tokenizer
         self.stemmer = stemmer
@@ -52,7 +52,7 @@ class MyCustomTokenizer(object):
         return bag
 
 class WordAnalyzer(BaseEstimator, TransformerMixin):
-    def __init__(self, tokenizer: 'MyCustomTokenizer', num_ham_words: int=100, num_spam_words: int=100):
+    def __init__(self, tokenizer: 'CustomTokenizer', num_ham_words: int=100, num_spam_words: int=100):
         self.num_ham_words = num_ham_words
         self.num_spam_words = num_spam_words
         self.tokenizer = tokenizer
@@ -99,7 +99,7 @@ class WordAnalyzer(BaseEstimator, TransformerMixin):
                     features[i, j] = message[word_list[j]]
         return features.toarray()
     
-    def to_json(self, filename: str) -> None:
+    def words_to_json(self, filename: str) -> None:
         if self.words == None:
             raise Exception('No words extracted. Run the extract method.')
             
@@ -123,7 +123,7 @@ def main():
     spam_dataset['spam'] = np.where(spam_dataset['spam'].str.contains('spam'), 1, 0)
     
     original_spam_ratio = len(spam_dataset[spam_dataset['spam'] == 1])/len(spam_dataset['spam'])
-    print(original_spam_ratio)
+    print('The total ham/spam ratio is {}.'.format(original_spam_ratio))
     
     X = spam_dataset['message']
     y = spam_dataset['spam']
@@ -136,7 +136,7 @@ def main():
         stratify=y)
     
     train_spam_ratio = len(y_train[y_train == 1])/len(y_train)
-    print(train_spam_ratio)
+    print('The training set ham/spam ratio is {}.'.format(train_spam_ratio))
     
     spam_words = ' '.join(list(X_train[y_train == 1]))
     spam_wc = WordCloud(width=512, height=512).generate(spam_words)
@@ -156,25 +156,19 @@ def main():
     
     tokenizer = RegexpTokenizer(r'\w+')
     stemmer = PorterStemmer()
-    
-    custom_tokenizer = MyCustomTokenizer(tokenizer, stemmer)
+    custom_tokenizer = CustomTokenizer(tokenizer, stemmer)
     
     word_analyzer = WordAnalyzer(custom_tokenizer, num_ham_words=100, num_spam_words=100)
     word_analyzer.fit(X, y)
-    word_analyzer.to_json('words.json')
+    word_analyzer.words_to_json('words.json')
 
     features_train = word_analyzer.transform(X_train)
-    
-    cnb = MultinomialNB(alpha=1.0)
-    
-    cnb.fit(features_train, y_train)
-    
-    cnb.predict(features_train[1:20])
+    n_bayes = MultinomialNB(alpha=1.0)
+    n_bayes.fit(features_train, y_train)
     
     features_test = word_analyzer.transform(X_test)
-    
-    y_pred = cnb.predict(features_test)
-    cnb.score(features_test, y_test)
+    y_pred = n_bayes.predict(features_test)
+    n_bayes.score(features_test, y_test)
     
     print('The accuracy score is {}.'.format(accuracy_score(y_test, y_pred)))
     print('The precision score is {}.'.format(precision_score(y_test, y_pred)))
