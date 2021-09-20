@@ -59,6 +59,8 @@ class CustomVectorizer(BaseEstimator, TransformerMixin):
         self.num_spam_words = num_spam_words
         self.tokenizer = tokenizer
         self.words = None
+        self.ham_words = None
+        self.spam_words = None
         
     def fit(self, X, y) -> np.array:
         spam_words = Counter()
@@ -79,26 +81,35 @@ class CustomVectorizer(BaseEstimator, TransformerMixin):
                 else:
                     raise ValueError('y can only take on 0 (ham) or 1 (spam). Got {}.'.format(y[index]))
         
-        ham_list = sorted(ham_words.items(), key=lambda x: x[1], reverse=True)
-        spam_list = sorted(spam_words.items(), key=lambda x: x[1], reverse=True)
+        ham_word_freqs = sorted(ham_words.items(), key=lambda x: x[1], reverse=True)
+        spam_word_freqs = sorted(spam_words.items(), key=lambda x: x[1], reverse=True)
         
-        ham_list = [word[0] for word in ham_list]
-        spam_list = [word[0] for word in spam_list]
+        ham_words = [word[0] for word in ham_word_freqs]
+        spam_words = [word[0] for word in spam_word_freqs]
         
-        self.words = {'ham': ham_list[:self.num_ham_words], 'spam': spam_list[:self.num_spam_words]}
+        if len(ham_words) >= self.num_ham_words:
+            self.ham_words = ham_words[:self.num_ham_words]
+        else:
+            self.ham_words = ham_words
+        
+        if len(spam_words) >= self.num_spam_words:
+            self.spam_words = spam_words[:self.num_spam_words]
+        else:
+            self.spam_words = spam_words
+        
+        self.words = self.ham_words + spam_words
         return self
     
     def transform(self, X) -> dok_matrix:
         if self.words == None:
             raise Exception('Fit must be run before transform.')
         
-        word_list = self.words['ham'] + self.words['spam']
-        features = dok_matrix((len(X), len(word_list)), dtype=np.float32)
+        features = dok_matrix((len(X), len(self.words)), dtype=np.float32)
         for i in range(len(X)):
             message = self.tokenizer.tokenize(X.iloc[i])
-            for j in range(len(word_list)):
-                if word_list[j] in message:
-                    features[i, j] = message[word_list[j]]
+            for j in range(len(self.words)):
+                if self.words[j] in message:
+                    features[i, j] = message[self.words[j]]
         return features.toarray()
     
     def words_to_json(self, filename: str) -> None:
