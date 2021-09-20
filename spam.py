@@ -16,8 +16,8 @@ from nltk.stem import PorterStemmer
 import numpy as np
 import pandas as pd
 from scipy.sparse import dok_matrix
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
+from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
+from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
@@ -119,6 +119,18 @@ class CustomVectorizer(BaseEstimator, TransformerMixin):
         with open(filename, 'w') as file:
             json.dump(self.words, file, indent=4)
 
+def print_score(model: ClassifierMixin, X, y) -> None:
+    score = model.score(X, y)
+    y_pred = model.predict(X)
+    
+    print('The accuracy score is {}.'.format(score))
+    print('The precision score is {}.'.format(precision_score(y, y_pred)))
+    print('The recall score is {}.'.format(recall_score(y, y_pred)))
+    print('The f1 score is {}.'.format(f1_score(y, y_pred)))
+    
+    print('The confusion matrix is:')
+    print(confusion_matrix(y, y_pred))
+
 def main():
     spam_dataset = pd.read_csv(
     'spam.csv',
@@ -180,16 +192,8 @@ def main():
         ])
     
     pipe.fit(X_train, y_train)
-    y_pred = pipe.predict(X_test)
-    pipe.score(X_test, y_pred)
     
-    print('The accuracy score is {}.'.format(accuracy_score(y_test, y_pred)))
-    print('The precision score is {}.'.format(precision_score(y_test, y_pred)))
-    print('The recall score is {}.'.format(recall_score(y_test, y_pred)))
-    print('The f1 score is {}.'.format(f1_score(y_test, y_pred)))
-    
-    print('The confusion matrix is:')
-    print(confusion_matrix(y_test, y_pred))
+    print_score(pipe, X_test, y_test)
 
 if __name__ == "__main__":
     main()
