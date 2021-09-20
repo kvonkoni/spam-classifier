@@ -183,12 +183,9 @@ def main():
     stemmer = PorterStemmer()
     custom_tokenizer = CustomTokenizer(tokenizer, stemmer)
     
-    word_analyzer = CustomVectorizer(custom_tokenizer, num_ham_words=100, num_spam_words=100)
-    n_bayes = MultinomialNB(alpha=1.0)
-    
     pipe = Pipeline([
-        ('word_analyzer', word_analyzer),
-        ('naive_bayes', n_bayes),
+        ('custom_vectorizer', CustomVectorizer(custom_tokenizer, num_ham_words=100, num_spam_words=100)),
+        ('naive_bayes', MultinomialNB(alpha=1.0)),
         ])
     
     pipe.fit(X_train, y_train)
