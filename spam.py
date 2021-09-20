@@ -24,7 +24,7 @@ from sklearn.pipeline import Pipeline
 from wordcloud import WordCloud
 
 class CustomTokenizer(object):
-    def __init__(self, tokenizer: TokenizerI, stemmer: StemmerI=None, lower_case: bool=True, exclude_stopwords: bool=True):
+    def __init__(self, tokenizer: TokenizerI, stemmer: StemmerI=None, lower_case: bool=True, exclude_stopwords: bool=True) -> None:
         self.tokenizer = tokenizer
         self.stemmer = stemmer
         self.lower_case = lower_case
@@ -52,7 +52,7 @@ class CustomTokenizer(object):
                 bag[word] += 1
         return bag
 
-class WordAnalyzer(BaseEstimator, TransformerMixin):
+class CustomVectorizer(BaseEstimator, TransformerMixin):
     def __init__(self, tokenizer: 'CustomTokenizer', num_ham_words: int=100, num_spam_words: int=100):
         super().__init__()
         self.num_ham_words = num_ham_words
@@ -160,7 +160,7 @@ def main():
     stemmer = PorterStemmer()
     custom_tokenizer = CustomTokenizer(tokenizer, stemmer)
     
-    word_analyzer = WordAnalyzer(custom_tokenizer, num_ham_words=100, num_spam_words=100)
+    word_analyzer = CustomVectorizer(custom_tokenizer, num_ham_words=100, num_spam_words=100)
     n_bayes = MultinomialNB(alpha=1.0)
     
     pipe = Pipeline([
