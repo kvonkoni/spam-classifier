@@ -17,9 +17,10 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import dok_matrix
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
+from sklearn.pipeline import Pipeline
 from wordcloud import WordCloud
 
 class CustomTokenizer(object):
@@ -53,6 +54,7 @@ class CustomTokenizer(object):
 
 class WordAnalyzer(BaseEstimator, TransformerMixin):
     def __init__(self, tokenizer: 'CustomTokenizer', num_ham_words: int=100, num_spam_words: int=100):
+        super().__init__()
         self.num_ham_words = num_ham_words
         self.num_spam_words = num_spam_words
         self.tokenizer = tokenizer
@@ -84,7 +86,7 @@ class WordAnalyzer(BaseEstimator, TransformerMixin):
         spam_list = [word[0] for word in spam_list]
         
         self.words = {'ham': ham_list[:self.num_ham_words], 'spam': spam_list[:self.num_spam_words]}
-        return self.words
+        return self
     
     def transform(self, X) -> dok_matrix:
         if self.words == None:
@@ -159,16 +161,16 @@ def main():
     custom_tokenizer = CustomTokenizer(tokenizer, stemmer)
     
     word_analyzer = WordAnalyzer(custom_tokenizer, num_ham_words=100, num_spam_words=100)
-    word_analyzer.fit(X, y)
-    word_analyzer.words_to_json('words.json')
-
-    features_train = word_analyzer.transform(X_train)
     n_bayes = MultinomialNB(alpha=1.0)
-    n_bayes.fit(features_train, y_train)
     
-    features_test = word_analyzer.transform(X_test)
-    y_pred = n_bayes.predict(features_test)
-    n_bayes.score(features_test, y_test)
+    pipe = Pipeline([
+        ('word_analyzer', word_analyzer),
+        ('naive_bayes', n_bayes),
+        ])
+    
+    pipe.fit(X_train, y_train)
+    y_pred = pipe.predict(X_test)
+    pipe.score(X_test, y_pred)
     
     print('The accuracy score is {}.'.format(accuracy_score(y_test, y_pred)))
     print('The precision score is {}.'.format(precision_score(y_test, y_pred)))
