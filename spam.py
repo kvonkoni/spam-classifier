@@ -53,7 +53,7 @@ class CustomTokenizer(object):
         return bag
 
 class CustomVectorizer(BaseEstimator, TransformerMixin):
-    def __init__(self, tokenizer: 'CustomTokenizer', num_ham_words: int=100, num_spam_words: int=100):
+    def __init__(self, tokenizer: 'CustomTokenizer', num_ham_words: int=np.inf, num_spam_words: int=np.inf):
         super().__init__()
         self.num_ham_words = num_ham_words
         self.num_spam_words = num_spam_words
@@ -119,17 +119,14 @@ class CustomVectorizer(BaseEstimator, TransformerMixin):
         with open(filename, 'w') as file:
             json.dump(self.words, file, indent=4)
 
-def print_score(model: ClassifierMixin, X, y) -> None:
+def print_score(model: ClassifierMixin, X, y, num_to_display=20) -> None:
     score = model.score(X, y)
     y_pred = model.predict(X)
     
-    print('The accuracy score is {}.'.format(score))
-    print('The precision score is {}.'.format(precision_score(y, y_pred)))
-    print('The recall score is {}.'.format(recall_score(y, y_pred)))
-    print('The f1 score is {}.'.format(f1_score(y, y_pred)))
-    
-    print('The confusion matrix is:')
-    print(confusion_matrix(y, y_pred))
+    print('The accuracy score is approximately {:.4f}.'.format(score))
+    print('The precision score is approximately {:.4f}.'.format(precision_score(y, y_pred)))
+    print('The recall score is approximately {:.4f}.'.format(recall_score(y, y_pred)))
+    print('The f1 score is approximately {:.4f}.'.format(f1_score(y, y_pred)))
 
 def main():
     spam_dataset = pd.read_csv(
